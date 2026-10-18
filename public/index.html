@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f5132" />
+  <title>Poker Podium</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♠</text></svg>" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="readonly">
+  <header class="topbar">
+    <div class="topbar-row">
+      <a href="#/" class="brand"><span class="brand-suit">♠</span> <span id="brand-name">Poker Podium</span></a>
+      <div id="auth-area" class="auth-area"></div>
+    </div>
+    <nav class="nav" id="nav">
+      <a href="#/" data-nav="">Inicio</a>
+      <a href="#/partidas" data-nav="partidas">Partidas</a>
+      <a href="#/jugadores" data-nav="jugadores">Jugadores</a>
+      <a href="#/estadisticas" data-nav="estadisticas">Estadísticas</a>
+      <a href="#/fondo" data-nav="fondo">Fondo</a>
+      <a href="#/ajustes" data-nav="ajustes">Ajustes</a>
+    </nav>
+  </header>
+  <main id="app" class="container"></main>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <dialog id="modal"></dialog>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
