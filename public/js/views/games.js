@@ -45,7 +45,6 @@ export async function openNewGame() {
         <label class="field"><span>Entrada (₡)</span><input type="number" name="buy_in" min="0" step="500" value="${esc(settings.buy_in)}" required></label>
         <label class="field"><span>Recompra (₡)</span><input type="number" name="rebuy" min="0" step="500" value="${esc(settings.rebuy)}" required></label>
         <label class="field"><span>Dealer por cabeza (₡)</span><input type="number" name="dealer_fee" min="0" step="500" value="${esc(settings.dealer_fee)}" required></label>
-        <label class="field"><span>Redondear premios a (₡)</span><input type="number" name="rounding" min="0" step="100" value="${esc(settings.rounding)}"></label>
       </div>
       <div class="field" style="margin-top:.75rem">
         <span>Estructura de premios</span>
@@ -89,7 +88,6 @@ export async function openNewGame() {
         buy_in: f.buy_in.value,
         rebuy: f.rebuy.value,
         dealer_fee: f.dealer_fee.value,
-        rounding: f.rounding.value || 0,
         places,
         player_ids: [...form.querySelectorAll('[name=player]:checked')].map((c) => Number(c.value)),
       });

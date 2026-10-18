@@ -45,7 +45,6 @@ create table if not exists public.games (
   rebuy       integer not null check (rebuy >= 0),
   dealer_fee  integer not null default 0 check (dealer_fee >= 0),
   places      jsonb not null default '[100]' check (public.places_valid(places)),
-  rounding    integer not null default 0 check (rounding >= 0),
   status      text not null default 'open' check (status in ('open', 'finished')),
   seating     jsonb,
   notes       text,
@@ -120,7 +119,6 @@ insert into public.settings (key, value) values
   ('buy_in', '10000'),
   ('rebuy', '10000'),
   ('dealer_fee', '2000'),
-  ('rounding', '1000'),
   ('seats_per_table', '9'),
   ('default_template_id', '')
 on conflict (key) do nothing;
@@ -138,6 +136,11 @@ where not exists (select 1 from public.payout_templates);
 update public.settings
 set value = (select id::text from public.payout_templates where name = '1° 70% + 30% al fondo' limit 1)
 where key = 'default_template_id' and coalesce(value, '') = '';
+
+-- ---------- Limpieza de versiones anteriores ----------
+-- El redondeo de premios se eliminó: los premios se calculan exactos.
+alter table public.games drop column if exists rounding;
+delete from public.settings where key = 'rounding';
 
 -- ---------- Administradores ----------
 -- Agrega el correo de cada persona que puede editar (cámbialo por el real) y ejecuta:

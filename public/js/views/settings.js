@@ -20,14 +20,12 @@ export async function render(root, { isCurrent }) {
               <label class="field"><span>Entrada (₡)</span><input type="number" name="buy_in" min="0" step="500" value="${esc(settings.buy_in)}"></label>
               <label class="field"><span>Recompra (₡)</span><input type="number" name="rebuy" min="0" step="500" value="${esc(settings.rebuy)}"></label>
               <label class="field"><span>Dealer por cabeza (₡)</span><input type="number" name="dealer_fee" min="0" step="500" value="${esc(settings.dealer_fee)}"></label>
-              <label class="field"><span>Redondeo premios (₡)</span><input type="number" name="rounding" min="0" step="100" value="${esc(settings.rounding)}"></label>
               <label class="field"><span>Máx. jugadores por mesa</span><input type="number" name="seats_per_table" min="2" max="12" value="${esc(settings.seats_per_table)}"></label>
             </div>
             <label class="field"><span>Estructura de premios por defecto</span>
               <select name="default_template_id">${templates.map((t) => `<option value="${t.id}" ${String(t.id) === settings.default_template_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
             </label>
           </fieldset>
-          <p class="hint">Redondeo: los premios se redondean hacia abajo a ese múltiplo y el sobrante va al fondo. Usa 0 para no redondear.</p>
           <div class="admin-only"><button class="btn-primary">Guardar</button></div>
         </form>
       </section>

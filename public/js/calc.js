@@ -1,8 +1,8 @@
 // Reglas de dinero de una partida. Todo en colones enteros.
 //
 //   Bote       = jugadores × entrada + recompras × valor recompra
-//   Premios    = bote × % de cada posición (redondeado hacia abajo al múltiplo configurado)
-//   Fondo      = bote − premios  (incluye el % no repartido y los sobrantes del redondeo)
+//   Premios    = bote × % de cada posición (en colones enteros, sin decimales)
+//   Fondo      = bote − premios  (el % no repartido)
 //   Dealer     = jugadores × cuota dealer  (se cobra aparte, no sale del bote)
 //   Gasto      = entrada + recompras × valor recompra + cuota dealer
 //   Neto       = premio − gasto
@@ -25,8 +25,6 @@ export function validatePlaces(places) {
 
 export function computeGame(game, entries) {
   const places = parsePlaces(game.places);
-  const rounding = Number(game.rounding) || 0;
-  const roundDown = (v) => (rounding > 0 ? Math.floor(v / rounding) * rounding : Math.round(v));
 
   const players = entries.length;
   const totalRebuys = entries.reduce((a, e) => a + e.rebuys, 0);
@@ -35,7 +33,7 @@ export function computeGame(game, entries) {
   const pot = buyInTotal + rebuyTotal;
   const dealerTotal = players * game.dealer_fee;
 
-  const payouts = places.map((pct, i) => ({ position: i + 1, pct, amount: roundDown((pot * pct) / 100) }));
+  const payouts = places.map((pct, i) => ({ position: i + 1, pct, amount: Math.floor(Math.round(pot * pct * 100) / 10000) }));
   const manual = entries.some((e) => e.prize_override !== null && e.prize_override !== undefined);
 
   const computedEntries = entries.map((e) => {

@@ -66,8 +66,8 @@ Supabase pausa los proyectos gratis tras **7 días sin actividad**. El workflow 
 | Concepto | Cálculo |
 |---|---|
 | Bote | jugadores × entrada + recompras × valor recompra |
-| Premio por posición | bote × % de esa posición, redondeado **hacia abajo** al múltiplo configurado (ej. ₡1 000) |
-| Fondo fin de año | bote − premios (el % no repartido + sobrantes del redondeo) |
+| Premio por posición | bote × % de esa posición (en colones enteros) |
+| Fondo fin de año | bote − premios (el % no repartido) |
 | Dealer | jugadores × cuota por cabeza (se cobra aparte, **no** sale del bote) |
 | Gastó (por jugador) | entrada + recompras × valor + dealer |
 | Neto | premio − gastó |

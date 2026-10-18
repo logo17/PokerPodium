@@ -67,7 +67,7 @@ export async function render(root, { args, isCurrent }) {
                 : '<button class="btn-sm" data-manual title="Para acuerdos (chop) o repartos distintos">Repartir manualmente</button>'}
             </div>
           </div>
-          <div class="hint" style="margin-bottom:.5rem">${placesLabel(game.places)} · Entrada ${money(game.buy_in)} · Recompra ${money(game.rebuy)}${game.rounding ? ` · Redondeo a ${money(game.rounding)}` : ''}</div>
+          <div class="hint" style="margin-bottom:.5rem">${placesLabel(game.places)} · Entrada ${money(game.buy_in)} · Recompra ${money(game.rebuy)}</div>
           <ul class="list">
             ${s.manual
               ? s.entries.filter((e) => e.prize > 0).sort((a, b) => b.prize - a.prize).map((e) => `<li>${medal(e.position)}<span class="grow title">${esc(e.name)}</span><strong>${money(e.prize)}</strong></li>`).join('')
@@ -251,7 +251,6 @@ function editConfig(game, templates) {
         <label class="field"><span>Entrada (₡)</span><input type="number" name="buy_in" min="0" step="500" value="${game.buy_in}" required></label>
         <label class="field"><span>Recompra (₡)</span><input type="number" name="rebuy" min="0" step="500" value="${game.rebuy}" required></label>
         <label class="field"><span>Dealer por cabeza (₡)</span><input type="number" name="dealer_fee" min="0" step="500" value="${game.dealer_fee}" required></label>
-        <label class="field"><span>Redondear premios a (₡)</span><input type="number" name="rounding" min="0" step="100" value="${game.rounding}"></label>
       </div>
       <div class="field" style="margin-top:.75rem">
         <span>Porcentajes de premio por posición</span>
@@ -278,7 +277,6 @@ function editConfig(game, templates) {
         buy_in: f.buy_in.value,
         rebuy: f.rebuy.value,
         dealer_fee: f.dealer_fee.value,
-        rounding: f.rounding.value || 0,
         places,
         notes: f.notes.value,
       });

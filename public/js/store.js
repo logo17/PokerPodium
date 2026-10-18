@@ -62,7 +62,7 @@ export async function getSettings() {
 }
 
 export async function saveSettings(values) {
-  for (const k of ['buy_in', 'rebuy', 'dealer_fee', 'rounding']) if (k in values) int(values[k], k);
+  for (const k of ['buy_in', 'rebuy', 'dealer_fee']) if (k in values) int(values[k], k);
   if ('seats_per_table' in values) int(values.seats_per_table, 'asientos por mesa', { min: 2 });
   const rows = Object.entries(values).map(([key, value]) => ({ key, value: String(value ?? '') }));
   await mutate(supabase.from('settings').upsert(rows).select());
@@ -187,7 +187,7 @@ function gameFields(body) {
   }
   if (body.location !== undefined) f.location = String(body.location || '').trim() || null;
   if (body.notes !== undefined) f.notes = String(body.notes || '').trim() || null;
-  for (const k of ['buy_in', 'rebuy', 'dealer_fee', 'rounding']) if (body[k] !== undefined) f[k] = int(body[k], k);
+  for (const k of ['buy_in', 'rebuy', 'dealer_fee']) if (body[k] !== undefined) f[k] = int(body[k], k);
   if (body.places !== undefined) f.places = validatePlaces(body.places);
   if (body.status !== undefined) f.status = body.status;
   return f;

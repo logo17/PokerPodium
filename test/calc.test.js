@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeGame, validatePlaces, randomSeating, aggregateStats } from '../public/js/calc.js';
 
-const game = (over = {}) => ({ buy_in: 10000, rebuy: 10000, dealer_fee: 2000, places: [70], rounding: 1000, status: 'finished', ...over });
+const game = (over = {}) => ({ buy_in: 10000, rebuy: 10000, dealer_fee: 2000, places: [70], status: 'finished', ...over });
 const entry = (player_id, rebuys = 0, position = null, extra = {}) => ({ id: player_id, player_id, name: `P${player_id}`, rebuys, position, prize_override: null, paid: false, ...extra });
 
 test('bote, premio del 1° con 70% y resto al fondo', () => {
@@ -16,19 +16,18 @@ test('bote, premio del 1° con 70% y resto al fondo', () => {
   assert.equal(winner.net, 10000);
 });
 
-test('redondeo hacia abajo manda el sobrante al fondo', () => {
+test('premios exactos por porcentaje, sin redondeo', () => {
   const s = computeGame(game({ places: [50, 30, 20] }), [1, 2, 3, 4, 5, 6, 7].map((i) => entry(i, 0, i <= 3 ? i : null)));
-  // bote 70000 → 35000 / 21000 / 14000 exactos
   assert.deepEqual(s.payouts.map((p) => p.amount), [35000, 21000, 14000]);
-  const s2 = computeGame(game({ places: [65, 35] }), [entry(1, 0, 1), entry(2, 0, 2), entry(3, 1)]);
-  // bote 40000 → 26000 / 14000
-  assert.deepEqual(s2.payouts.map((p) => p.amount), [26000, 14000]);
-  const s3 = computeGame(game({ places: [60, 40] }), [entry(1, 0, 1), entry(2, 0, 2), entry(3, 0, 3)]);
-  // bote 30000 → 18000 / 12000 ; con places 60/40 no sobra
-  assert.equal(s3.fund, 0);
-  const s4 = computeGame(game({ places: [66.6, 33.4] }), [entry(1, 0, 1), entry(2, 0, 2), entry(3)]);
-  assert.deepEqual(s4.payouts.map((p) => p.amount), [19000, 10000]);
-  assert.equal(s4.fund, 1000);
+  assert.equal(s.fund, 0);
+  const s2 = computeGame(game({ places: [66.6, 33.4] }), [entry(1, 0, 1), entry(2, 0, 2), entry(3)]);
+  // bote 30000 → 19980 / 10020, nada se redondea a miles
+  assert.deepEqual(s2.payouts.map((p) => p.amount), [19980, 10020]);
+  assert.equal(s2.fund, 0);
+  const s3 = computeGame(game({ places: [60, 30] }), [entry(1, 0, 1), entry(2, 0, 2), entry(3, 1)]);
+  // bote 40000 → 24000 / 12000, el 10% restante al fondo
+  assert.deepEqual(s3.payouts.map((p) => p.amount), [24000, 12000]);
+  assert.equal(s3.fund, 4000);
 });
 
 test('premios manuales (chop)', () => {
