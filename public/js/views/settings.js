@@ -1,11 +1,13 @@
 import { auth } from '../supabase.js';
 import { getSettings, saveSettings, listTemplates, saveTemplate, deleteTemplate, exportAll } from '../store.js';
-import { esc, modal, confirmDialog, run, placesLabel, parsePlaces } from '../ui.js';
+import { esc, modal, confirmDialog, run, placesLabel, parsePlaces, money } from '../ui.js';
+import { blindSettings, parseLevels, levelsText } from '../calc.js';
 
 export async function render(root, { isCurrent }) {
   const [settings, templates] = await Promise.all([getSettings(), listTemplates()]);
   if (!isCurrent()) return;
   const ro = auth.isAdmin ? '' : 'disabled';
+  const blinds = blindSettings(settings);
 
   root.innerHTML = `
     <div class="page-head"><h1>Ajustes</h1></div>
@@ -40,6 +42,23 @@ export async function render(root, { isCurrent }) {
         </li>`).join('')}</ul>
       </section>
 
+      <section class="card">
+        <h2>Ciegas</h2>
+        <p class="hint">Se copian a cada partida nueva; en cada partida se pueden ajustar en ⚙︎ Configuración.</p>
+        <form data-blinds class="stack">
+          <fieldset ${ro} style="border:0;padding:0;margin:0" class="stack">
+            <div class="form-grid">
+              <label class="field"><span>Minutos por nivel</span><input type="number" name="blind_minutes" min="0" step="1" value="${blinds.minutes}" required></label>
+              <label class="field row" style="align-self:end;min-height:38px"><input type="checkbox" name="blind_on_elimination" ${blinds.onElimination ? 'checked' : ''}> Subir al eliminar a un jugador</label>
+            </div>
+            <label class="field"><span>Niveles (chica/grande, separados por coma)</span><textarea name="blind_levels" rows="2">${esc(levelsText(blinds.levels))}</textarea></label>
+          </fieldset>
+          <p class="hint">Minutos en 0 = solo suben al eliminar a alguien o a mano. El último nivel es el tope.</p>
+          <div class="table-wrap"><table data-levels-preview></table></div>
+          <div class="admin-only"><button class="btn-primary">Guardar ciegas</button></div>
+        </form>
+      </section>
+
       <section class="card stack">
         <h2>Acceso</h2>
         ${auth.isAdmin
@@ -65,6 +84,29 @@ export async function render(root, { isCurrent }) {
     if (await run(() => saveSettings(body), 'Ajustes guardados')) {
       document.getElementById('brand-name').textContent = body.group_name || 'Poker Podium';
     }
+  };
+
+  const blindsForm = root.querySelector('[data-blinds]');
+  const preview = () => {
+    const levels = parseLevels(blindsForm.elements.blind_levels.value);
+    blindsForm.querySelector('[data-levels-preview]').innerHTML = levels.length
+      ? `<thead><tr><th>Nivel</th><th class="num">Chica</th><th class="num">Grande</th></tr></thead>
+         <tbody>${levels.map((l, i) => `<tr><td>${i + 1}${i === levels.length - 1 ? ' <span class="badge">tope</span>' : ''}</td><td class="num">${money(l.sb)}</td><td class="num">${money(l.bb)}</td></tr>`).join('')}</tbody>`
+      : '<tbody><tr><td class="muted">Escribe los niveles, p. ej. 50/100, 100/200</td></tr></tbody>';
+  };
+  blindsForm.elements.blind_levels.oninput = preview;
+  preview();
+  blindsForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = blindsForm.elements;
+    await run(
+      () => saveSettings({
+        blind_minutes: f.blind_minutes.value,
+        blind_on_elimination: f.blind_on_elimination.checked,
+        blind_levels: parseLevels(f.blind_levels.value),
+      }),
+      'Ciegas guardadas',
+    );
   };
 
   const editTpl = (t) =>

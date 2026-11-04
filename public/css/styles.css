@@ -283,3 +283,48 @@ dialog::backdrop { background: rgb(0 0 0 / 0.45); }
   .poker-table { background: #fff; color: #000; border-color: #000; }
   .poker-table h3 { color: #000; }
 }
+
+/* ---------- Reloj de ciegas ---------- */
+
+.readonly-only { display: none; }
+body.readonly .readonly-only { display: inline-block; }
+tr.row-out td { opacity: 0.55; }
+tr.row-out td:last-child { opacity: 1; }
+
+.bc { display: flex; flex-direction: column; gap: 0.6rem; }
+.bc-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.bc-level { font-weight: 700; }
+.bc-blinds { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.bc-blinds > div { background: var(--felt); color: #fff; border-radius: 10px; padding: 0.6rem 0.8rem; display: flex; flex-direction: column; }
+.bc-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.8; }
+.bc-amount { font-size: 1.8rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.bc-timer { font-size: 2.6rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; line-height: 1; }
+.bc-timer.bc-urgent { color: var(--neg); }
+.bc-bar { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.bc-bar > span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 1s linear; }
+.bc-next { text-align: center; color: var(--muted); }
+.bc-next strong { color: var(--text); }
+.bc-meta { text-align: center; color: var(--muted); font-size: 0.88rem; }
+.bc-controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem; }
+.bc-full { text-align: center; font-size: 0.9rem; }
+.bc-flash { animation: bc-flash 0.6s ease-in-out 5; }
+@keyframes bc-flash { 50% { background: var(--accent-soft); box-shadow: 0 0 0 4px var(--accent); border-radius: var(--radius); } }
+
+/* Pantalla completa del reloj: sin barra de navegación, todo grande. */
+body.fullscreen-view .topbar { display: none; }
+body.fullscreen-view .container { max-width: none; padding: 1rem; padding-top: max(1rem, env(safe-area-inset-top)); }
+.clock-page { min-height: calc(100vh - 2rem); display: flex; flex-direction: column; gap: 0.5rem; }
+.clock-top { display: flex; align-items: center; gap: 0.5rem; }
+.clock-title { text-align: center; color: var(--muted); }
+.clock-title::first-letter { text-transform: uppercase; }
+.clock-pot { text-align: center; color: var(--muted); font-size: 1.1rem; }
+.bc-large { flex: 1; justify-content: center; gap: clamp(0.5rem, 2vh, 1.75rem); max-width: 1100px; width: 100%; margin: 0 auto; }
+.bc-large .bc-head { font-size: clamp(1rem, 2.4vw, 1.5rem); }
+.bc-large .bc-blinds > div { padding: clamp(0.5rem, 1.6vh, 1.5rem) 1rem; align-items: center; border-radius: 16px; }
+.bc-large .bc-label { font-size: clamp(0.8rem, 1.8vw, 1.2rem); }
+.bc-large .bc-amount { font-size: clamp(2.4rem, min(9vw, 12vh), 7rem); }
+.bc-large .bc-timer { font-size: clamp(4rem, min(18vw, 24vh), 13rem); }
+.bc-large .bc-bar { height: 10px; }
+.bc-large .bc-next { font-size: clamp(1.1rem, min(3vw, 4.5vh), 2rem); }
+.bc-large .bc-meta { font-size: clamp(0.95rem, 2vw, 1.3rem); }
+.bc-large .bc-controls button { font-size: 1.05rem; padding: 0.6rem 1.1rem; }

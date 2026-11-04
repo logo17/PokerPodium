@@ -2,8 +2,11 @@ import { auth } from '../supabase.js';
 import {
   getGame, listPlayers, listTemplates, getSettings, updateGame, deleteGame, createPlayer, addEntries,
   updateEntry, deleteEntry, setPrizeOverrides, clearPrizeOverrides, shuffleSeating, clearSeating,
+  clockAction, eliminateEntry, reviveEntry, subscribeGame,
 } from '../store.js';
 import { money, num, signed, date, esc, kpi, medal, modal, confirmDialog, run, toast, placesLabel, parsePlaces, playerName } from '../ui.js';
+import { parseLevels, levelsText } from '../calc.js';
+import { mountClock } from '../blinds.js';
 
 export async function render(root, { args, isCurrent }) {
   const id = args[0];
@@ -23,6 +26,32 @@ export async function render(root, { args, isCurrent }) {
     }
   };
 
+  // El reloj vive fuera del redibujado para no perder su estado (y detectar cuándo suben las ciegas).
+  const clockEl = document.createElement('section');
+  clockEl.className = 'card no-print';
+  clockEl.style.marginBottom = '1rem';
+  const clock = mountClock(clockEl, {
+    gameId: id,
+    onAction: (action) => run(() => clockAction(game, action)).then((g) => (update(g), g)),
+  });
+
+  // Cambios hechos desde otros dispositivos. Si alguien está escribiendo en un campo, se espera a que termine.
+  let pending = false;
+  const refresh = async () => {
+    const active = document.activeElement;
+    if (root.contains(active) && active.matches('input[type=number], input[type=text], textarea')) {
+      if (!pending) {
+        pending = true;
+        active.addEventListener('blur', () => { pending = false; refresh(); }, { once: true });
+      }
+      return;
+    }
+    if (document.getElementById('modal').open) return setTimeout(refresh, 1000);
+    const g = await getGame(id).catch(() => null);
+    if (g && isCurrent()) update(g);
+  };
+  const unsubscribe = subscribeGame(id, refresh);
+
   function draw() {
     const s = game.summary;
     const inGame = new Set(s.entries.map((e) => e.player_id));
@@ -30,13 +59,18 @@ export async function render(root, { args, isCurrent }) {
     const finished = game.status === 'finished';
     const ro = auth.isAdmin ? '' : 'disabled';
     const byPosition = Object.fromEntries(s.entries.filter((e) => e.position).map((e) => [e.position, e]));
+    const alive = s.entries.filter((e) => !e.eliminated_at).length;
+    // Durante la partida: primero los que siguen en juego, luego los eliminados por posición.
+    const rows = finished
+      ? s.entries
+      : [...s.entries].sort((a, b) => Number(!!a.eliminated_at) - Number(!!b.eliminated_at) || (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name, 'es'));
 
     root.innerHTML = `
       <div class="page-head">
         <div>
           <a href="#/partidas" class="muted">← Partidas</a>
           <h1>${date(game.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h1>
-          <div class="sub">${game.location ? `${esc(game.location)} · ` : ''}<span class="badge ${finished ? 'badge-done' : 'badge-open'}">${finished ? 'Finalizada' : 'En curso'}</span></div>
+          <div class="sub">${game.location ? `${esc(game.location)} · ` : ''}<span class="badge ${finished ? 'badge-done' : 'badge-open'}">${finished ? 'Finalizada' : 'En curso'}</span>${!finished && s.players ? ` · Quedan ${alive} de ${s.players}` : ''}</div>
         </div>
         <div class="row no-print admin-only">
           <button data-edit>⚙︎ Configuración</button>
@@ -46,6 +80,8 @@ export async function render(root, { args, isCurrent }) {
       </div>
 
       ${s.warnings.length ? `<div class="alert" style="margin-bottom:1rem">⚠️ ${s.warnings.map(esc).join(' ')}</div>` : ''}
+
+      ${finished ? '' : '<div data-clock-slot style="margin-bottom:1rem"></div>'}
 
       <div class="kpis" style="margin-bottom:1rem">
         ${kpi('Jugadores', s.players)}
@@ -89,11 +125,16 @@ export async function render(root, { args, isCurrent }) {
           </div>
           ${s.entries.length ? `<div class="table-wrap"><table>
             <thead><tr>
-              <th>Jugador</th><th>Recompras</th><th>Posición</th><th class="num">Premio</th><th class="num">Gastó</th><th class="num">Neto</th><th>Pagó</th><th class="no-print admin-only"></th>
+              <th>Jugador</th>${finished ? '' : '<th>En juego</th>'}<th>Recompras</th><th>Posición</th><th class="num">Premio</th><th class="num">Gastó</th><th class="num">Neto</th><th>Pagó</th><th class="no-print admin-only"></th>
             </tr></thead>
             <tbody>
-              ${s.entries.map((e) => `<tr data-entry="${e.id}">
+              ${rows.map((e) => `<tr data-entry="${e.id}" class="${e.eliminated_at && !finished ? 'row-out' : ''}">
                 <td><a href="#/jugadores/${e.player_id}">${esc(e.name)}</a></td>
+                ${finished ? '' : `<td>${e.eliminated_at
+                  ? `<span class="badge">Fuera${e.position ? ` · ${e.position}°` : ''}</span> <button class="btn-sm btn-ghost admin-only" data-revive title="Deshacer eliminación">↺</button>`
+                  : alive > 1
+                    ? `<button class="btn-sm admin-only" data-elim>Eliminar</button><span class="badge badge-done readonly-only">En juego</span>`
+                    : '<span class="badge badge-done">🏆 Ganador</span>'}</td>`}
                 <td><div class="stepper">
                   <button class="btn-icon btn-sm no-print admin-only" data-rebuy="-1" ${e.rebuys === 0 ? 'disabled' : ''} aria-label="Quitar recompra">−</button>
                   <span class="val">${e.rebuys}</span>
@@ -113,7 +154,7 @@ export async function render(root, { args, isCurrent }) {
               </tr>`).join('')}
             </tbody>
             <tfoot><tr>
-              <td>${s.players} jugadores</td><td>${s.totalRebuys}</td><td></td>
+              <td>${s.players} jugadores</td>${finished ? '' : '<td></td>'}<td>${s.totalRebuys}</td><td></td>
               <td class="num">${money(s.prizesTotal)}</td><td class="num">${money(s.totalCollected)}</td><td></td><td>${s.paidCount}/${s.players}</td><td class="no-print admin-only"></td>
             </tr></tfoot>
           </table></div>
@@ -136,6 +177,11 @@ export async function render(root, { args, isCurrent }) {
         ${game.notes ? `<section class="card"><h2>Notas</h2><p style="white-space:pre-wrap;margin:0">${esc(game.notes)}</p></section>` : ''}
       </div>`;
 
+    const slot = root.querySelector('[data-clock-slot]');
+    if (slot) {
+      slot.replaceWith(clockEl);
+      clock.set(game);
+    }
     bind(available);
   }
 
@@ -206,6 +252,16 @@ export async function render(root, { args, isCurrent }) {
       row.querySelector('[data-paid]').onchange = (e) => put({ paid: e.target.checked });
       const prize = row.querySelector('[data-prize]');
       if (prize) prize.onchange = () => put({ prize_override: Number(prize.value) || 0 });
+      const elim = row.querySelector('[data-elim]');
+      if (elim) elim.onclick = async () => {
+        const g = await run(() => eliminateEntry(game, entryId));
+        if (!g) return;
+        const out = g.summary.entries.find((e) => String(e.id) === entryId);
+        toast(`${entry.name} eliminado${out?.position ? ` en ${out.position}° lugar` : ''}`);
+        update(g);
+      };
+      const revive = row.querySelector('[data-revive]');
+      if (revive) revive.onclick = async () => update(await run(() => reviveEntry(game, entryId), `${entry.name} vuelve al juego`));
       row.querySelector('[data-remove]').onclick = async () => {
         if (!(await confirmDialog('Quitar jugador', `¿Quitar a ${entry.name} de esta partida?`, 'Quitar'))) return;
         update(await run(() => deleteEntry(entryId)));
@@ -239,6 +295,10 @@ export async function render(root, { args, isCurrent }) {
   }
 
   draw();
+  return () => {
+    unsubscribe();
+    clock.destroy();
+  };
 }
 
 function editConfig(game, templates) {
@@ -258,6 +318,13 @@ function editConfig(game, templates) {
         <div class="chips" style="margin-top:.35rem">${templates.map((t) => `<button type="button" class="btn-sm" data-tpl="${t.places.join(', ')}">${esc(t.name)}</button>`).join('')}</div>
         <span class="hint" data-hint></span>
       </div>
+      <h3 style="margin-top:1rem">Ciegas</h3>
+      <div class="form-grid">
+        <label class="field"><span>Minutos por nivel</span><input type="number" name="blind_minutes" min="0" step="1" value="${game.blind_minutes}" required></label>
+        <label class="field row" style="align-self:end;min-height:38px"><input type="checkbox" name="blind_on_elimination" ${game.blind_on_elimination ? 'checked' : ''}> Subir al eliminar a un jugador</label>
+      </div>
+      <label class="field" style="margin-top:.5rem"><span>Niveles (chica/grande)</span><input name="blind_levels" value="${esc(levelsText(game.blind_levels))}" required></label>
+      <span class="hint">Minutos en 0 = solo suben al eliminar o a mano. El último nivel es el tope.</span>
       <label class="field" style="margin-top:.75rem"><span>Notas</span><textarea name="notes">${esc(game.notes || '')}</textarea></label>`,
     onOpen(form) {
       const input = form.elements.places;
@@ -279,6 +346,9 @@ function editConfig(game, templates) {
         dealer_fee: f.dealer_fee.value,
         places,
         notes: f.notes.value,
+        blind_minutes: f.blind_minutes.value,
+        blind_on_elimination: f.blind_on_elimination.checked,
+        blind_levels: parseLevels(f.blind_levels.value),
       });
     },
   });

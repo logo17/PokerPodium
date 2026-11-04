@@ -77,6 +77,17 @@ Cada partida guarda su propia configuración, así que cambiar los valores por d
 **Estructuras de premios**: porcentajes por posición, p. ej. `100` (solo 1°), `65, 35`, `50, 30, 20`, o `70` (1° se lleva 70% y 30% va al fondo).
 **Reparto manual**: para un *chop* o acuerdos, "Repartir manualmente" en la partida permite editar el premio de cada jugador; lo no repartido va al fondo.
 
+## Reloj de ciegas
+
+Cada partida en curso muestra el reloj arriba, y **⛶ Pantalla completa** lo abre en grande para un celular, tablet o TV (mantiene la pantalla encendida).
+
+- **Suben por tiempo** (minutos por nivel, configurable; 0 = sin tiempo) **y/o al eliminar a un jugador** (botón *Eliminar* en Participantes). Se aplican las dos reglas a la vez.
+- **Eliminar** asigna la posición automáticamente (el primero en salir queda de último) y, cuando queda uno, lo marca como ganador. **↺** deshace una eliminación (las ciegas no bajan solas; para eso está *− Nivel*).
+- Controles (solo administradores): iniciar, pausar/reanudar, subir o bajar nivel y reiniciar.
+- **🔔 Alertas**: sonido y vibración cuando suben las ciegas y un aviso cuando falta 1 minuto. Se activa en cada dispositivo (los navegadores exigen tocar la página para permitir sonido; en iPhone el modo silencio lo apaga y no vibra).
+- **Sincronizado**: todos los que tengan la partida abierta ven el mismo reloj en tiempo real (Supabase Realtime).
+- Estructura por defecto en *Ajustes → Ciegas*: `50/100, 100/200, 200/400, 400/800, 800/1600, 1600/3200, 2500/5000` (el último nivel es el tope). Cada partida guarda su copia y se puede ajustar en *⚙︎ Configuración*.
+
 ## Estructura
 
 ```
@@ -86,8 +97,9 @@ public/                 Lo que se publica (sin build)
   js/config.js          URL y anon key de Supabase
   js/supabase.js        Cliente y sesión
   js/store.js           Lecturas/escrituras a la base de datos
-  js/calc.js            Bote, premios, fondo, estadísticas y sorteo de mesas
-  js/views/             Inicio, partidas, partida, jugadores, estadísticas, fondo, ajustes
+  js/calc.js            Bote, premios, fondo, estadísticas, sorteo de mesas y reloj de ciegas
+  js/blinds.js          Componente del reloj (cuenta regresiva, controles, sonido)
+  js/views/             Inicio, partidas, partida, reloj, jugadores, estadísticas, fondo, ajustes
 supabase/schema.sql     Tablas, reglas de seguridad (RLS) y datos iniciales
 scripts/dev-server.js   Servidor local para desarrollo
 test/                   Pruebas (node --test)

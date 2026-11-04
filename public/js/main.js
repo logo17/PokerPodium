@@ -4,6 +4,7 @@ import { esc, modal, toast } from './ui.js';
 import * as dashboard from './views/dashboard.js';
 import * as games from './views/games.js';
 import * as game from './views/game.js';
+import * as clockView from './views/clock.js';
 import * as players from './views/players.js';
 import * as player from './views/player.js';
 import * as stats from './views/stats.js';
@@ -14,6 +15,7 @@ const routes = [
   [/^$/, dashboard],
   [/^partidas$/, games],
   [/^partidas\/(\d+)$/, game],
+  [/^partidas\/(\d+)\/reloj$/, clockView],
   [/^jugadores$/, players],
   [/^jugadores\/(\d+)$/, player],
   [/^estadisticas$/, stats],
@@ -23,6 +25,7 @@ const routes = [
 
 const root = document.getElementById('app');
 let renderId = 0;
+let cleanup = null; // lo que devuelve la vista al montarse (suscripciones, temporizadores)
 
 async function router() {
   const [path, query = ''] = location.hash.replace(/^#\/?/, '').split('?');
@@ -30,6 +33,9 @@ async function router() {
   const section = path.split('/')[0];
   document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === section));
 
+  cleanup?.();
+  cleanup = null;
+  document.body.classList.toggle('fullscreen-view', path.endsWith('/reloj'));
   const match = routes.find(([re]) => re.test(path));
   const id = ++renderId;
   if (!match) {
@@ -41,7 +47,11 @@ async function router() {
   root.innerHTML = '<div class="loading">Cargando…</div>';
   try {
     // `isCurrent` permite a la vista ignorar respuestas tardías si el usuario ya navegó a otro lado.
-    await view.render(root, { args, params, isCurrent: () => id === renderId });
+    const done = await view.render(root, { args, params, isCurrent: () => id === renderId });
+    if (typeof done === 'function') {
+      if (id === renderId) cleanup = done;
+      else done();
+    }
   } catch (err) {
     if (id === renderId) root.innerHTML = `<div class="empty">Error: ${esc(err.message)}</div>`;
   }

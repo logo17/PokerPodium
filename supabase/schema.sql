@@ -77,6 +77,32 @@ create table if not exists public.admins (
   email  text primary key
 );
 
+-- ---------- Ciegas y eliminaciones ----------
+-- blind_levels: [{"sb": chica, "bb": grande}, ...]; el último nivel es el tope.
+-- blind_minutes: minutos por nivel (0 = solo suben al eliminar a alguien).
+-- clock: estado del reloj compartido { level, offset_ms, anchor, running }; null = sin iniciar.
+alter table public.games add column if not exists blind_levels jsonb not null
+  default '[{"sb":50,"bb":100},{"sb":100,"bb":200},{"sb":200,"bb":400},{"sb":400,"bb":800},{"sb":800,"bb":1600},{"sb":1600,"bb":3200},{"sb":2500,"bb":5000}]';
+alter table public.games add column if not exists blind_minutes integer not null default 45 check (blind_minutes >= 0);
+alter table public.games add column if not exists blind_on_elimination boolean not null default true;
+alter table public.games add column if not exists clock jsonb;
+alter table public.entries add column if not exists eliminated_at timestamptz;
+
+-- Tiempo real: los cambios en partidas y participantes se envían a todos los dispositivos abiertos.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    begin
+      alter publication supabase_realtime add table public.games;
+    exception when duplicate_object then null;
+    end;
+    begin
+      alter publication supabase_realtime add table public.entries;
+    exception when duplicate_object then null;
+    end;
+  end if;
+end $$;
+
 -- ---------- Seguridad ----------
 
 create or replace function public.is_admin() returns boolean
@@ -116,11 +142,14 @@ alter table public.admins enable row level security;  -- sin políticas: nadie l
 
 insert into public.settings (key, value) values
   ('group_name', 'Poker Podium'),
-  ('buy_in', '10000'),
-  ('rebuy', '10000'),
-  ('dealer_fee', '2000'),
+  ('buy_in', '5000'),
+  ('rebuy', '5000'),
+  ('dealer_fee', '500'),
   ('seats_per_table', '9'),
-  ('default_template_id', '')
+  ('default_template_id', ''),
+  ('blind_levels', '[{"sb":50,"bb":100},{"sb":100,"bb":200},{"sb":200,"bb":400},{"sb":400,"bb":800},{"sb":800,"bb":1600},{"sb":1600,"bb":3200},{"sb":2500,"bb":5000}]'),
+  ('blind_minutes', '45'),
+  ('blind_on_elimination', 'true')
 on conflict (key) do nothing;
 
 insert into public.payout_templates (name, places)

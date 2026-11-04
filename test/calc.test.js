@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeGame, validatePlaces, randomSeating, aggregateStats } from '../public/js/calc.js';
+import { computeGame, validatePlaces, randomSeating, aggregateStats, blindState, clockAfter, parseLevels, validateLevels, DEFAULT_BLINDS, blindSettings } from '../public/js/calc.js';
 
 const game = (over = {}) => ({ buy_in: 10000, rebuy: 10000, dealer_fee: 2000, places: [70], status: 'finished', ...over });
 const entry = (player_id, rebuys = 0, position = null, extra = {}) => ({ id: player_id, player_id, name: `P${player_id}`, rebuys, position, prize_override: null, paid: false, ...extra });
@@ -82,4 +82,79 @@ test('aggregateStats suma por jugador y detecta récords', () => {
   assert.equal(s.records.mostRebuys.name, 'P2');
   const netSum = s.players.reduce((a, p) => a + p.net, 0);
   assert.equal(netSum, -(s.totals.fund + s.totals.dealer)); // lo que pierde el grupo = fondo + dealer
+});
+
+// ---------- Ciegas ----------
+
+const T0 = Date.parse('2026-11-07T20:00:00Z');
+const MIN = 60000;
+const bgame = (clock, over = {}) => ({ blind_levels: DEFAULT_BLINDS, blind_minutes: 45, blind_on_elimination: true, clock, ...over });
+
+test('reloj sin iniciar: nivel 1 con el tiempo completo', () => {
+  const s = blindState(bgame(null), T0);
+  assert.equal(s.level, 0);
+  assert.deepEqual(s.current, { sb: 50, bb: 100 });
+  assert.deepEqual(s.next, { sb: 100, bb: 200 });
+  assert.equal(s.remainingMs, 45 * MIN);
+  assert.equal(s.started, false);
+});
+
+test('las ciegas suben solas con el tiempo y se detienen en el tope', () => {
+  const g = bgame(clockAfter(bgame(null), 'start', T0));
+  assert.equal(blindState(g, T0 + 44 * MIN).level, 0);
+  const s = blindState(g, T0 + 46 * MIN);
+  assert.equal(s.level, 1);
+  assert.equal(s.remainingMs, 44 * MIN);
+  const end = blindState(g, T0 + 10 * 60 * MIN);
+  assert.equal(end.level, 6);
+  assert.deepEqual(end.current, { sb: 2500, bb: 5000 });
+  assert.equal(end.atMax, true);
+  assert.equal(end.next, null);
+  assert.equal(end.remainingMs, null);
+});
+
+test('pausa congela el tiempo y reanudar sigue donde iba', () => {
+  let g = bgame(clockAfter(bgame(null), 'start', T0));
+  g = bgame(clockAfter(g, 'pause', T0 + 10 * MIN));
+  assert.equal(blindState(g, T0 + 500 * MIN).remainingMs, 35 * MIN);
+  assert.equal(blindState(g, T0 + 500 * MIN).level, 0);
+  g = bgame(clockAfter(g, 'resume', T0 + 60 * MIN));
+  assert.equal(blindState(g, T0 + 70 * MIN).remainingMs, 25 * MIN);
+});
+
+test('subir/bajar nivel reinicia el tiempo del nivel y respeta los límites', () => {
+  let g = bgame(clockAfter(bgame(null), 'start', T0));
+  g = bgame(clockAfter(g, 'up', T0 + 20 * MIN));
+  let s = blindState(g, T0 + 20 * MIN);
+  assert.equal(s.level, 1);
+  assert.equal(s.remainingMs, 45 * MIN);
+  assert.equal(s.running, true);
+  g = bgame(clockAfter(g, 'down', T0 + 21 * MIN));
+  g = bgame(clockAfter(g, 'down', T0 + 22 * MIN));
+  assert.equal(blindState(g, T0 + 22 * MIN).level, 0);
+  // subir sin haber iniciado deja el reloj en pausa en el nivel 2
+  s = blindState(bgame(clockAfter(bgame(null), 'up', T0)), T0 + 99 * MIN);
+  assert.equal(s.level, 1);
+  assert.equal(s.running, false);
+  assert.equal(clockAfter(g, 'reset', T0), null);
+});
+
+test('con 0 minutos las ciegas solo suben a mano o al eliminar', () => {
+  const g = bgame(clockAfter(bgame(null), 'start', T0), { blind_minutes: 0 });
+  const s = blindState(g, T0 + 600 * MIN);
+  assert.equal(s.level, 0);
+  assert.equal(s.remainingMs, null);
+});
+
+test('parseLevels acepta chica/grande o grande-chica', () => {
+  assert.deepEqual(parseLevels('100-50, 200-100\n400 / 200'), [{ sb: 50, bb: 100 }, { sb: 100, bb: 200 }, { sb: 200, bb: 400 }]);
+  assert.throws(() => validateLevels([]), /al menos/);
+  assert.throws(() => validateLevels([{ sb: 0, bb: 100 }]), /mayores a 0/);
+});
+
+test('blindSettings usa la estructura por defecto si no hay ajustes', () => {
+  assert.deepEqual(blindSettings({}), { levels: DEFAULT_BLINDS, minutes: 45, onElimination: true });
+  assert.deepEqual(blindSettings({ blind_minutes: '60', blind_on_elimination: 'false', blind_levels: '[{"sb":25,"bb":50}]' }), {
+    levels: [{ sb: 25, bb: 50 }], minutes: 60, onElimination: false,
+  });
 });

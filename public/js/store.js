@@ -1,7 +1,7 @@
 // Capa de datos: todas las lecturas/escrituras a Supabase pasan por aquí.
 // Los permisos los aplica la base de datos (RLS); aquí solo se traducen los errores.
 import { supabase } from './supabase.js';
-import { computeGame, validatePlaces, randomSeating, emptyStats, addEntry, finalizeStats, aggregateStats } from './calc.js';
+import { computeGame, validatePlaces, validateLevels, clockAfter, randomSeating, emptyStats, addEntry, finalizeStats, aggregateStats } from './calc.js';
 
 const NO_PERMISSION = 'No tienes permiso para hacer cambios. Inicia sesión como administrador.';
 const FRIENDLY = {
@@ -32,7 +32,7 @@ const int = (v, field, { min = 0, nullable = false } = {}) => {
   return n;
 };
 
-const ENTRY_SELECT = 'id, game_id, player_id, rebuys, position, prize_override, paid, players(name, nickname)';
+const ENTRY_SELECT = 'id, game_id, player_id, rebuys, position, prize_override, paid, eliminated_at, players(name, nickname)';
 
 function normEntries(list) {
   return list
@@ -64,6 +64,9 @@ export async function getSettings() {
 export async function saveSettings(values) {
   for (const k of ['buy_in', 'rebuy', 'dealer_fee']) if (k in values) int(values[k], k);
   if ('seats_per_table' in values) int(values.seats_per_table, 'asientos por mesa', { min: 2 });
+  if ('blind_minutes' in values) int(values.blind_minutes, 'minutos por nivel');
+  if ('blind_levels' in values) values = { ...values, blind_levels: JSON.stringify(validateLevels(values.blind_levels)) };
+  if ('blind_on_elimination' in values) values = { ...values, blind_on_elimination: values.blind_on_elimination ? 'true' : 'false' };
   const rows = Object.entries(values).map(([key, value]) => ({ key, value: String(value ?? '') }));
   await mutate(supabase.from('settings').upsert(rows).select());
   return getSettings();
@@ -190,6 +193,9 @@ function gameFields(body) {
   for (const k of ['buy_in', 'rebuy', 'dealer_fee']) if (body[k] !== undefined) f[k] = int(body[k], k);
   if (body.places !== undefined) f.places = validatePlaces(body.places);
   if (body.status !== undefined) f.status = body.status;
+  if (body.blind_levels !== undefined) f.blind_levels = validateLevels(body.blind_levels);
+  if (body.blind_minutes !== undefined) f.blind_minutes = int(body.blind_minutes, 'minutos por nivel');
+  if (body.blind_on_elimination !== undefined) f.blind_on_elimination = !!body.blind_on_elimination;
   return f;
 }
 
@@ -236,6 +242,62 @@ export async function setPrizeOverrides(gameId, prizes) {
 export async function clearPrizeOverrides(gameId) {
   await mutate(supabase.from('entries').update({ prize_override: null }).eq('game_id', gameId).select('id'));
   return getGame(gameId);
+}
+
+// ---------- Reloj de ciegas y eliminaciones ----------
+
+export async function clockAction(game, action) {
+  const clock = clockAfter(game, action);
+  await mutate(supabase.from('games').update({ clock }).eq('id', game.id).select('id'));
+  return getGame(game.id);
+}
+
+// Saca a un jugador: queda en la última posición libre y, si la partida lo indica, suben las ciegas.
+// Cuando solo queda uno, se le asigna el 1° lugar.
+export async function eliminateEntry(game, entryId) {
+  const alive = game.summary.entries.filter((e) => !e.eliminated_at);
+  if (!alive.some((e) => String(e.id) === String(entryId))) throw new Error('Ese jugador ya fue eliminado.');
+  if (alive.length < 2) throw new Error('Ya solo queda un jugador.');
+  await mutate(
+    supabase.from('entries').update({ eliminated_at: new Date().toISOString(), position: alive.length }).eq('id', entryId).select('id'),
+  );
+  const remaining = alive.filter((e) => String(e.id) !== String(entryId));
+  if (remaining.length === 1) {
+    await mutate(supabase.from('entries').update({ position: 1 }).eq('id', remaining[0].id).select('id'));
+  } else if (game.blind_on_elimination) {
+    await mutate(supabase.from('games').update({ clock: clockAfter(game, 'up') }).eq('id', game.id).select('id'));
+  }
+  return getGame(game.id);
+}
+
+// Deshace una eliminación. No baja las ciegas (para eso está el botón de nivel).
+export async function reviveEntry(game, entryId) {
+  await mutate(supabase.from('entries').update({ eliminated_at: null, position: null }).eq('id', entryId).select('id'));
+  // Si se había asignado el 1° automáticamente, ya no aplica: vuelve a haber más de un jugador en juego.
+  const autoWinner = game.summary.entries.find((e) => !e.eliminated_at && e.position === 1);
+  if (autoWinner) await mutate(supabase.from('entries').update({ position: null }).eq('id', autoWinner.id).select('id'));
+  return getGame(game.id);
+}
+
+// Avisa de cualquier cambio en la partida o sus participantes (hecho desde cualquier dispositivo).
+// Devuelve la función para cancelar la suscripción.
+export function subscribeGame(gameId, onChange) {
+  let timer;
+  const fire = () => {
+    clearTimeout(timer);
+    timer = setTimeout(onChange, 250); // agrupa las ráfagas de cambios de una misma acción
+  };
+  const channel = supabase
+    .channel(`game-${gameId}-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, fire)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'entries', filter: `game_id=eq.${gameId}` }, fire)
+    // Los DELETE no se pueden filtrar por columna: se escuchan todos y se recarga.
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'entries' }, fire)
+    .subscribe();
+  return () => {
+    clearTimeout(timer);
+    supabase.removeChannel(channel);
+  };
 }
 
 export async function deleteEntry(id) {
