@@ -79,7 +79,7 @@ Cada partida guarda su propia configuración, así que cambiar los valores por d
 
 ## Reloj de ciegas
 
-Cada partida en curso muestra el reloj arriba, y **⛶ Pantalla completa** lo abre en grande para un celular, tablet o TV (mantiene la pantalla encendida).
+Cada partida en curso muestra el reloj arriba, y **⛶ Pantalla completa** lo abre en grande para un celular, tablet o TV (mantiene la pantalla encendida). Ahí también se ve quién sigue en juego y quién ha sido eliminado, con su posición.
 
 - **Suben por tiempo** (minutos por nivel, configurable; 0 = sin tiempo) **y/o al eliminar a un jugador** (botón *Eliminar* en Participantes). Se aplican las dos reglas a la vez.
 - **Eliminar** asigna la posición automáticamente (el primero en salir queda de último) y, cuando queda uno, lo marca como ganador. **↺** deshace una eliminación (las ciegas no bajan solas; para eso está *− Nivel*).

@@ -328,3 +328,21 @@ body.fullscreen-view .container { max-width: none; padding: 1rem; padding-top: m
 .bc-large .bc-next { font-size: clamp(1.1rem, min(3vw, 4.5vh), 2rem); }
 .bc-large .bc-meta { font-size: clamp(0.95rem, 2vw, 1.3rem); }
 .bc-large .bc-controls button { font-size: 1.05rem; padding: 0.6rem 1.1rem; }
+
+/* Lista de jugadores en la pantalla del reloj: al lado en pantallas anchas, debajo en celular. */
+.clock-layout { flex: 1; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-content: start; }
+.clock-main { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.clock-roster { display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; }
+.clock-roster h3 { margin: 0; display: flex; align-items: center; gap: 0.4rem; font-size: clamp(0.95rem, 1.6vw, 1.2rem); }
+.roster-count { background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 0 0.5rem; font-size: 0.85em; }
+.roster-in { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.roster-in li { background: var(--accent-soft); color: var(--text); border: 1px solid var(--accent); border-radius: 999px; padding: 0.2rem 0.7rem; font-weight: 600; font-size: clamp(0.9rem, 1.5vw, 1.15rem); }
+.roster-out { list-style: none; margin: 0; padding: 0; }
+.roster-out li { display: flex; gap: 0.5rem; padding: 0.2rem 0; color: var(--muted); border-bottom: 1px solid var(--border); font-size: clamp(0.85rem, 1.4vw, 1.05rem); }
+.roster-out li:last-child { border-bottom: none; }
+.roster-pos { min-width: 2.2em; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .clock-layout { grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 340px); align-content: stretch; }
+  .clock-roster { max-height: calc(100vh - 7rem); }
+}
