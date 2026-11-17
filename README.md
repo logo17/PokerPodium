@@ -83,10 +83,18 @@ Cada partida en curso muestra el reloj arriba, y **⛶ Pantalla completa** lo ab
 
 - **Suben por tiempo** (minutos por nivel, configurable; 0 = sin tiempo) **y/o al eliminar a un jugador** (botón *Eliminar* en Participantes). Se aplican las dos reglas a la vez.
 - **Eliminar** asigna la posición automáticamente (el primero en salir queda de último) y, cuando queda uno, lo marca como ganador. **↺** deshace una eliminación (las ciegas no bajan solas; para eso está *− Nivel*).
+- **Duración total de la partida** (por defecto 4 h, configurable en *Ajustes* y en cada partida; 0 = sin límite): corre junto con el reloj de ciegas y la pausa detiene ambos. Avisa cuando faltan 30 y 10 minutos, y al cumplirse muestra "¡Tiempo cumplido! La partida terminó" (no cierra nada: el dealer hace los ajustes finales).
 - Controles (solo administradores): iniciar, pausar/reanudar, subir o bajar nivel y reiniciar.
 - **🔔 Alertas**: sonido y vibración cuando suben las ciegas y un aviso cuando falta 1 minuto. Se activa en cada dispositivo (los navegadores exigen tocar la página para permitir sonido; en iPhone el modo silencio lo apaga y no vibra).
 - **Sincronizado**: todos los que tengan la partida abierta ven el mismo reloj en tiempo real (Supabase Realtime).
 - Estructura por defecto en *Ajustes → Ciegas*: `50/100, 100/200, 200/400, 400/800, 800/1600, 1600/3200, 2500/5000` (el último nivel es el tope). Cada partida guarda su copia y se puede ajustar en *⚙︎ Configuración*.
+
+## Mesas
+
+- **🎲 Sortear** reparte al azar a los jugadores que siguen en juego en mesas parejas (según *Máx. jugadores por mesa*) y sortea el botón de dealer de cada mesa.
+- **Unir en una mesa**: cuando hay varias mesas y quedan 10 jugadores o menos (configurable en *Ajustes → Unir en una mesa con*), aparece el botón **🔀 Unir en una mesa**. Junta a los que siguen en juego en una sola mesa y sortea de nuevo asientos y botón. El dealer elige el momento (p. ej. al terminar una mano).
+- La mesa final se ve en la partida y en la pantalla completa del reloj, con el orden de asientos y el botón inicial. Los eliminados aparecen tachados.
+- En la pantalla completa, con varias mesas, los que siguen en juego se agrupan por mesa (en orden de asiento, con el botón inicial) y cada eliminado indica de qué mesa salió.
 
 ## Estructura
 

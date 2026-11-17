@@ -1,7 +1,7 @@
 // Capa de datos: todas las lecturas/escrituras a Supabase pasan por aquí.
 // Los permisos los aplica la base de datos (RLS); aquí solo se traducen los errores.
 import { supabase } from './supabase.js';
-import { computeGame, validatePlaces, validateLevels, clockAfter, randomSeating, emptyStats, addEntry, finalizeStats, aggregateStats } from './calc.js';
+import { computeGame, validatePlaces, validateLevels, clockAfter, randomSeating, canMergeTables, finalTableSize, emptyStats, addEntry, finalizeStats, aggregateStats } from './calc.js';
 
 const NO_PERMISSION = 'No tienes permiso para hacer cambios. Inicia sesión como administrador.';
 const FRIENDLY = {
@@ -64,7 +64,9 @@ export async function getSettings() {
 export async function saveSettings(values) {
   for (const k of ['buy_in', 'rebuy', 'dealer_fee']) if (k in values) int(values[k], k);
   if ('seats_per_table' in values) int(values.seats_per_table, 'asientos por mesa', { min: 2 });
+  if ('final_table_size' in values) int(values.final_table_size, 'jugadores para mesa final', { min: 2 });
   if ('blind_minutes' in values) int(values.blind_minutes, 'minutos por nivel');
+  if ('total_minutes' in values) int(values.total_minutes, 'duración total');
   if ('blind_levels' in values) values = { ...values, blind_levels: JSON.stringify(validateLevels(values.blind_levels)) };
   if ('blind_on_elimination' in values) values = { ...values, blind_on_elimination: values.blind_on_elimination ? 'true' : 'false' };
   const rows = Object.entries(values).map(([key, value]) => ({ key, value: String(value ?? '') }));
@@ -196,6 +198,7 @@ function gameFields(body) {
   if (body.blind_levels !== undefined) f.blind_levels = validateLevels(body.blind_levels);
   if (body.blind_minutes !== undefined) f.blind_minutes = int(body.blind_minutes, 'minutos por nivel');
   if (body.blind_on_elimination !== undefined) f.blind_on_elimination = !!body.blind_on_elimination;
+  if (body.total_minutes !== undefined) f.total_minutes = int(body.total_minutes, 'duración total');
   return f;
 }
 
@@ -305,17 +308,34 @@ export async function deleteEntry(id) {
   return getGame(e.game_id);
 }
 
+// Solo se sientan los que siguen en juego.
+const alivePlayerIds = (game) => game.summary.entries.filter((e) => !e.eliminated_at).map((e) => e.player_id);
+
 export async function shuffleSeating(gameId, { seatsPerTable, tables } = {}) {
   const game = await getGame(gameId);
-  if (game.summary.players < 2) throw new Error('Se necesitan al menos 2 jugadores para sortear mesas.');
+  const ids = alivePlayerIds(game);
+  if (ids.length < 2) throw new Error('Se necesitan al menos 2 jugadores en juego para sortear mesas.');
   const seats = int(seatsPerTable, 'asientos por mesa', { min: 2 });
   const seating = {
     created_at: new Date().toISOString(),
     seats_per_table: seats,
-    tables: randomSeating(
-      game.summary.entries.map((e) => e.player_id),
-      { seatsPerTable: seats, tables: tables ? int(tables, 'mesas', { min: 1 }) : undefined },
-    ),
+    tables: randomSeating(ids, { seatsPerTable: seats, tables: tables ? int(tables, 'mesas', { min: 1 }) : undefined }),
+  };
+  await mutate(supabase.from('games').update({ seating }).eq('id', gameId).select('id'));
+  return getGame(gameId);
+}
+
+// Une a los que siguen en juego en una sola mesa, con asientos y botón de dealer sorteados de nuevo.
+export async function mergeTables(gameId, settings) {
+  const game = await getGame(gameId);
+  const size = finalTableSize(settings);
+  const { alive, can } = canMergeTables(game, size);
+  if (!can) throw new Error(alive > size ? `Todavía quedan ${alive} jugadores; se unen con ${size} o menos.` : 'No hay mesas que unir.');
+  const seating = {
+    created_at: new Date().toISOString(),
+    seats_per_table: size,
+    final: true,
+    tables: randomSeating(alivePlayerIds(game), { tables: 1 }),
   };
   await mutate(supabase.from('games').update({ seating }).eq('id', gameId).select('id'));
   return getGame(gameId);

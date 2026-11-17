@@ -318,12 +318,12 @@ body.fullscreen-view .container { max-width: none; padding: 1rem; padding-top: m
 .clock-title { text-align: center; color: var(--muted); }
 .clock-title::first-letter { text-transform: uppercase; }
 .clock-pot { text-align: center; color: var(--muted); font-size: 1.1rem; }
-.bc-large { flex: 1; justify-content: center; gap: clamp(0.5rem, 2vh, 1.75rem); max-width: 1100px; width: 100%; margin: 0 auto; }
+.bc-large { flex: 1; justify-content: center; gap: clamp(0.4rem, 1.6vh, 1.75rem); max-width: 1100px; width: 100%; margin: 0 auto; }
 .bc-large .bc-head { font-size: clamp(1rem, 2.4vw, 1.5rem); }
 .bc-large .bc-blinds > div { padding: clamp(0.5rem, 1.6vh, 1.5rem) 1rem; align-items: center; border-radius: 16px; }
 .bc-large .bc-label { font-size: clamp(0.8rem, 1.8vw, 1.2rem); }
-.bc-large .bc-amount { font-size: clamp(2.4rem, min(9vw, 12vh), 7rem); }
-.bc-large .bc-timer { font-size: clamp(4rem, min(18vw, 24vh), 13rem); }
+.bc-large .bc-amount { font-size: clamp(2.2rem, min(9vw, 10.5vh), 7rem); }
+.bc-large .bc-timer { font-size: clamp(3.5rem, min(18vw, 19vh), 13rem); }
 .bc-large .bc-bar { height: 10px; }
 .bc-large .bc-next { font-size: clamp(1.1rem, min(3vw, 4.5vh), 2rem); }
 .bc-large .bc-meta { font-size: clamp(0.95rem, 2vw, 1.3rem); }
@@ -345,4 +345,38 @@ body.fullscreen-view .container { max-width: none; padding: 1rem; padding-top: m
 @media (min-width: 900px) and (orientation: landscape) {
   .clock-layout { grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 340px); align-content: stretch; }
   .clock-roster { max-height: calc(100vh - 7rem); }
+}
+
+/* Tiempo total de la partida */
+.bc-total { text-align: center; padding: 0.4rem 0.75rem; border-radius: 8px; background: var(--surface-2); font-variant-numeric: tabular-nums; }
+.bc-total strong { font-size: 1.15em; }
+.bc-total.bc-urgent { color: var(--neg); }
+.bc-total.bc-urgent .muted { color: inherit; opacity: 0.8; }
+.bc-total-over { background: #a3201a; color: #fff; animation: bc-pulse 1.6s ease-in-out infinite; }
+.bc-total-over .bc-over { opacity: 0.85; font-size: 0.9em; }
+@keyframes bc-pulse { 50% { box-shadow: 0 0 0 4px rgb(255 90 70 / 0.55); } }
+.bc-large .bc-total { font-size: clamp(1rem, min(2.4vw, 3.6vh), 1.6rem); padding: 0.5rem 1rem; }
+
+/* Unir mesas / mesa final */
+.merge-banner { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; padding: 0.75rem 1rem; margin-bottom: 0.75rem; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent); }
+.poker-table li.seat-out { opacity: 0.5; text-decoration: line-through; }
+.poker-table li.seat-out small { text-decoration: none; display: inline-block; margin-left: 0.25rem; }
+.roster-seats { list-style: none; margin: 0; padding: 0; }
+.roster-seats li { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--border); font-weight: 600; font-size: clamp(0.95rem, 1.6vw, 1.2rem); }
+.roster-seats li:last-child { border-bottom: none; }
+.roster-table { border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.6rem; }
+.roster-table h4 { margin: 0 0 0.4rem; display: flex; align-items: center; gap: 0.4rem; font-size: clamp(0.9rem, 1.4vw, 1.05rem); }
+.roster-table .roster-in { margin: 0; }
+.roster-in li { display: inline-flex; align-items: center; gap: 0.3rem; }
+.roster-in .dealer-btn { margin-left: 0.1rem; }
+.chip-seat { font-size: 0.75em; font-weight: 700; opacity: 0.65; font-variant-numeric: tabular-nums; }
+.roster-out li .grow { flex: 1; }
+.roster-tag { font-size: 0.8em; padding: 0 0.45rem; border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
+@media (min-width: 900px) and (orientation: landscape) {
+  .clock-layout.roster-wide { grid-template-columns: minmax(0, 1fr) clamp(260px, 34vw, 480px); }
+  .roster-wide .clock-roster { gap: 0.4rem; padding: 0.75rem; }
+  .roster-wide .roster-table { padding: 0.4rem 0.5rem; }
+  .roster-wide .roster-in { gap: 0.25rem; }
+  .roster-wide .roster-in li { padding: 0.1rem 0.55rem; font-size: clamp(0.85rem, 1.25vw, 1.05rem); }
+  .roster-wide .roster-out li { padding: 0.1rem 0; }
 }

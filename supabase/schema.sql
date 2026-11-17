@@ -86,6 +86,8 @@ alter table public.games add column if not exists blind_levels jsonb not null
 alter table public.games add column if not exists blind_minutes integer not null default 45 check (blind_minutes >= 0);
 alter table public.games add column if not exists blind_on_elimination boolean not null default true;
 alter table public.games add column if not exists clock jsonb;
+-- total_minutes: duración total de la partida (0 = sin límite). Al cumplirse solo se avisa.
+alter table public.games add column if not exists total_minutes integer not null default 240 check (total_minutes >= 0);
 alter table public.entries add column if not exists eliminated_at timestamptz;
 
 -- Tiempo real: los cambios en partidas y participantes se envían a todos los dispositivos abiertos.
@@ -146,10 +148,12 @@ insert into public.settings (key, value) values
   ('rebuy', '5000'),
   ('dealer_fee', '500'),
   ('seats_per_table', '9'),
+  ('final_table_size', '10'),
   ('default_template_id', ''),
   ('blind_levels', '[{"sb":50,"bb":100},{"sb":100,"bb":200},{"sb":200,"bb":400},{"sb":400,"bb":800},{"sb":800,"bb":1600},{"sb":1600,"bb":3200},{"sb":2500,"bb":5000}]'),
   ('blind_minutes', '45'),
-  ('blind_on_elimination', 'true')
+  ('blind_on_elimination', 'true'),
+  ('total_minutes', '240')
 on conflict (key) do nothing;
 
 insert into public.payout_templates (name, places)

@@ -47,6 +47,7 @@ export async function openNewGame() {
         <label class="field"><span>Entrada (₡)</span><input type="number" name="buy_in" min="0" step="500" value="${esc(settings.buy_in)}" required></label>
         <label class="field"><span>Recompra (₡)</span><input type="number" name="rebuy" min="0" step="500" value="${esc(settings.rebuy)}" required></label>
         <label class="field"><span>Dealer por cabeza (₡)</span><input type="number" name="dealer_fee" min="0" step="500" value="${esc(settings.dealer_fee)}" required></label>
+        <label class="field"><span>Duración total (horas)</span><input type="number" name="total_hours" min="0" step="0.25" value="${blinds.totalMinutes / 60}" required title="0 = sin límite"></label>
         <label class="field"><span>Minutos por nivel de ciegas</span><input type="number" name="blind_minutes" min="0" step="1" value="${blinds.minutes}" required></label>
         <label class="field row" style="align-self:end;min-height:38px"><input type="checkbox" name="blind_on_elimination" ${blinds.onElimination ? 'checked' : ''}> Subir ciegas al eliminar</label>
       </div>
@@ -94,6 +95,7 @@ export async function openNewGame() {
         dealer_fee: f.dealer_fee.value,
         places,
         blind_minutes: f.blind_minutes.value,
+        total_minutes: Math.round(Number(f.total_hours.value) * 60),
         blind_on_elimination: f.blind_on_elimination.checked,
         blind_levels: blinds.levels,
         player_ids: [...form.querySelectorAll('[name=player]:checked')].map((c) => Number(c.value)),

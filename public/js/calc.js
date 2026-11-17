@@ -99,6 +99,22 @@ export function randomSeating(playerIds, { seatsPerTable = 9, tables } = {}, ran
   return result;
 }
 
+// ---------- Mesa final ----------
+
+export const DEFAULT_FINAL_TABLE_SIZE = 10;
+
+export function finalTableSize(settings) {
+  const n = Number(settings?.final_table_size);
+  return Number.isInteger(n) && n >= 2 ? n : DEFAULT_FINAL_TABLE_SIZE;
+}
+
+// Se sugiere unir cuando hay varias mesas y los que siguen en juego caben en una.
+export function canMergeTables(game, size) {
+  const alive = game.summary.entries.filter((e) => !e.eliminated_at).length;
+  const tables = game.seating?.tables?.length ?? 0;
+  return { alive, tables, can: game.status !== 'finished' && tables > 1 && alive >= 2 && alive <= size };
+}
+
 // ---------- Estadísticas por jugador ----------
 
 export function emptyStats(e) {
@@ -174,10 +190,12 @@ export function aggregateStats(games) {
 
 // ---------- Ciegas ----------
 //
-// El reloj se guarda como { level, offset_ms, anchor, running }:
-//   - level:     nivel en el que se fijó el estado (0 = primero)
-//   - offset_ms: tiempo ya transcurrido dentro de ese nivel en el momento `anchor`
-//   - anchor:    fecha ISO desde la que corre el tiempo (null si está en pausa)
+// El reloj se guarda como { level, offset_ms, total_offset_ms, anchor, running }:
+//   - level:           nivel en el que se fijó el estado (0 = primero)
+//   - offset_ms:       tiempo ya transcurrido dentro de ese nivel en el momento `anchor`
+//   - total_offset_ms: tiempo total de partida transcurrido en el momento `anchor`
+//   - anchor:          fecha ISO desde la que corre el tiempo (null si está en pausa)
+// La pausa detiene a la vez el nivel de ciegas y el tiempo total de la partida.
 // Con eso cualquier dispositivo calcula el nivel y el tiempo restante sin escribir cada segundo.
 
 export const DEFAULT_BLINDS = [
@@ -218,7 +236,10 @@ export function blindState(game, now = Date.now()) {
   const c = game.clock;
   const durationMs = Math.max(0, Number(game.blind_minutes) || 0) * 60000;
   let level = Math.min(Math.max(c?.level ?? 0, 0), max);
-  let elapsed = (c?.offset_ms || 0) + (c?.running && c.anchor ? Math.max(0, now - Date.parse(c.anchor)) : 0);
+  const sinceAnchor = c?.running && c.anchor ? Math.max(0, now - Date.parse(c.anchor)) : 0;
+  let elapsed = (c?.offset_ms || 0) + sinceAnchor;
+  const totalElapsedMs = (c?.total_offset_ms || 0) + sinceAnchor;
+  const totalMs = Math.max(0, Number(game.total_minutes) || 0) * 60000;
   if (durationMs > 0 && level < max) {
     const steps = Math.min(Math.floor(elapsed / durationMs), max - level);
     level += steps;
@@ -234,6 +255,10 @@ export function blindState(game, now = Date.now()) {
     elapsedInLevel: elapsed,
     remainingMs: durationMs > 0 && !atMax ? durationMs - elapsed : null,
     durationMs,
+    totalMs,
+    totalElapsedMs,
+    totalRemainingMs: totalMs > 0 ? Math.max(0, totalMs - totalElapsedMs) : null,
+    timeUp: totalMs > 0 && totalElapsedMs >= totalMs,
     running: !!c?.running,
     started: !!c,
   };
@@ -246,15 +271,16 @@ export function clockAfter(game, action, now = Date.now()) {
   const max = s.levels.length - 1;
   switch (action) {
     case 'start':
-      return { level: 0, offset_ms: 0, anchor: iso, running: true };
+      return { level: 0, offset_ms: 0, total_offset_ms: 0, anchor: iso, running: true };
     case 'pause':
-      return { level: s.level, offset_ms: s.elapsedInLevel, anchor: null, running: false };
+      return { level: s.level, offset_ms: s.elapsedInLevel, total_offset_ms: s.totalElapsedMs, anchor: null, running: false };
     case 'resume':
-      return { level: s.level, offset_ms: s.elapsedInLevel, anchor: iso, running: true };
+      return { level: s.level, offset_ms: s.elapsedInLevel, total_offset_ms: s.totalElapsedMs, anchor: iso, running: true };
     case 'up':
     case 'down': {
       const level = Math.min(Math.max(s.level + (action === 'up' ? 1 : -1), 0), max);
-      return { level, offset_ms: 0, anchor: s.running ? iso : null, running: s.running };
+      // El nivel arranca de cero, pero el tiempo total de la partida sigue donde iba.
+      return { level, offset_ms: 0, total_offset_ms: s.totalElapsedMs, anchor: s.running ? iso : null, running: s.running };
     }
     case 'reset':
       return null;
@@ -270,6 +296,11 @@ export function blindSettings(settings) {
     const parsed = JSON.parse(settings.blind_levels || 'null');
     if (Array.isArray(parsed) && parsed.length) levels = parsed;
   } catch {}
-  const minutes = settings.blind_minutes === undefined || settings.blind_minutes === '' ? 45 : Number(settings.blind_minutes);
-  return { levels, minutes, onElimination: settings.blind_on_elimination !== 'false' };
+  const num = (v, fallback) => (v === undefined || v === '' ? fallback : Number(v));
+  return {
+    levels,
+    minutes: num(settings.blind_minutes, 45),
+    onElimination: settings.blind_on_elimination !== 'false',
+    totalMinutes: num(settings.total_minutes, 240),
+  };
 }

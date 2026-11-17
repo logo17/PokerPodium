@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeGame, validatePlaces, randomSeating, aggregateStats, blindState, clockAfter, parseLevels, validateLevels, DEFAULT_BLINDS, blindSettings } from '../public/js/calc.js';
+import { computeGame, validatePlaces, randomSeating, aggregateStats, blindState, clockAfter, parseLevels, validateLevels, DEFAULT_BLINDS, blindSettings, canMergeTables, finalTableSize } from '../public/js/calc.js';
 
 const game = (over = {}) => ({ buy_in: 10000, rebuy: 10000, dealer_fee: 2000, places: [70], status: 'finished', ...over });
 const entry = (player_id, rebuys = 0, position = null, extra = {}) => ({ id: player_id, player_id, name: `P${player_id}`, rebuys, position, prize_override: null, paid: false, ...extra });
@@ -153,8 +153,82 @@ test('parseLevels acepta chica/grande o grande-chica', () => {
 });
 
 test('blindSettings usa la estructura por defecto si no hay ajustes', () => {
-  assert.deepEqual(blindSettings({}), { levels: DEFAULT_BLINDS, minutes: 45, onElimination: true });
-  assert.deepEqual(blindSettings({ blind_minutes: '60', blind_on_elimination: 'false', blind_levels: '[{"sb":25,"bb":50}]' }), {
-    levels: [{ sb: 25, bb: 50 }], minutes: 60, onElimination: false,
+  assert.deepEqual(blindSettings({}), { levels: DEFAULT_BLINDS, minutes: 45, onElimination: true, totalMinutes: 240 });
+  assert.deepEqual(blindSettings({ blind_minutes: '60', blind_on_elimination: 'false', blind_levels: '[{"sb":25,"bb":50}]', total_minutes: '180' }), {
+    levels: [{ sb: 25, bb: 50 }], minutes: 60, onElimination: false, totalMinutes: 180,
   });
+});
+
+// ---------- Tiempo total de la partida ----------
+
+const tgame = (clock, over = {}) => bgame(clock, { total_minutes: 240, ...over });
+
+test('tiempo total: corre con el reloj y se detiene con la pausa', () => {
+  let g = tgame(clockAfter(tgame(null), 'start', T0));
+  assert.equal(blindState(tgame(null), T0).totalRemainingMs, 240 * MIN);
+  assert.equal(blindState(g, T0 + 60 * MIN).totalRemainingMs, 180 * MIN);
+  g = tgame(clockAfter(g, 'pause', T0 + 60 * MIN));
+  assert.equal(blindState(g, T0 + 200 * MIN).totalRemainingMs, 180 * MIN); // en pausa no corre
+  g = tgame(clockAfter(g, 'resume', T0 + 200 * MIN));
+  assert.equal(blindState(g, T0 + 230 * MIN).totalRemainingMs, 150 * MIN);
+});
+
+test('tiempo total: subir o bajar de nivel no lo reinicia', () => {
+  let g = tgame(clockAfter(tgame(null), 'start', T0));
+  g = tgame(clockAfter(g, 'up', T0 + 20 * MIN));
+  g = tgame(clockAfter(g, 'down', T0 + 50 * MIN));
+  const s = blindState(g, T0 + 70 * MIN);
+  assert.equal(s.totalElapsedMs, 70 * MIN);
+  assert.equal(s.elapsedInLevel, 20 * MIN); // el nivel sí arrancó de cero al bajar
+});
+
+test('tiempo total: al cumplirse marca timeUp y sigue contando el excedente', () => {
+  const g = tgame(clockAfter(tgame(null), 'start', T0));
+  assert.equal(blindState(g, T0 + 239 * MIN).timeUp, false);
+  const s = blindState(g, T0 + 250 * MIN);
+  assert.equal(s.timeUp, true);
+  assert.equal(s.totalRemainingMs, 0);
+  assert.equal(s.totalElapsedMs - s.totalMs, 10 * MIN);
+});
+
+test('tiempo total en 0 = sin límite; relojes viejos sin total_offset_ms siguen funcionando', () => {
+  const g = tgame(clockAfter(tgame(null), 'start', T0), { total_minutes: 0 });
+  const s = blindState(g, T0 + 999 * MIN);
+  assert.equal(s.totalRemainingMs, null);
+  assert.equal(s.timeUp, false);
+  const old = tgame({ level: 1, offset_ms: 0, anchor: new Date(T0).toISOString(), running: true });
+  assert.equal(blindState(old, T0 + 30 * MIN).totalRemainingMs, 210 * MIN);
+});
+
+// ---------- Unir mesas ----------
+
+const mgame = (aliveCount, total, tables, over = {}) => ({
+  status: 'open',
+  seating: tables ? { tables: Array.from({ length: tables }, (_, i) => ({ table: i + 1, seats: [] })) } : null,
+  summary: { entries: Array.from({ length: total }, (_, i) => ({ player_id: i + 1, eliminated_at: i < total - aliveCount ? '2026-11-07T21:00:00Z' : null })) },
+  ...over,
+});
+
+test('se sugiere unir con 10 o menos en juego y más de una mesa', () => {
+  assert.equal(canMergeTables(mgame(11, 18, 2), 10).can, false);
+  assert.deepEqual(canMergeTables(mgame(10, 18, 2), 10), { alive: 10, tables: 2, can: true });
+  assert.equal(canMergeTables(mgame(8, 18, 1), 10).can, false); // ya es una sola mesa
+  assert.equal(canMergeTables(mgame(8, 18, 0), 10).can, false); // sin mesas sorteadas
+  assert.equal(canMergeTables(mgame(1, 18, 2), 10).can, false); // ya hay ganador
+  assert.equal(canMergeTables(mgame(8, 18, 2, { status: 'finished' }), 10).can, false);
+  assert.equal(canMergeTables(mgame(12, 18, 2), 12).can, true); // umbral configurable
+});
+
+test('finalTableSize: 10 por defecto, o lo configurado en Ajustes', () => {
+  assert.equal(finalTableSize({}), 10);
+  assert.equal(finalTableSize({ final_table_size: '8' }), 8);
+  assert.equal(finalTableSize({ final_table_size: 'x' }), 10);
+});
+
+test('una sola mesa con todos los que siguen y botón válido', () => {
+  const ids = [3, 5, 8, 9, 11, 14, 15];
+  const [t, ...rest] = randomSeating(ids, { tables: 1 });
+  assert.equal(rest.length, 0);
+  assert.deepEqual([...t.seats].sort((a, b) => a - b), ids);
+  assert.ok(t.button >= 0 && t.button < ids.length);
 });

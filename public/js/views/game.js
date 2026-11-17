@@ -2,10 +2,10 @@ import { auth } from '../supabase.js';
 import {
   getGame, listPlayers, listTemplates, getSettings, updateGame, deleteGame, createPlayer, addEntries,
   updateEntry, deleteEntry, setPrizeOverrides, clearPrizeOverrides, shuffleSeating, clearSeating,
-  clockAction, eliminateEntry, reviveEntry, subscribeGame,
+  clockAction, eliminateEntry, reviveEntry, subscribeGame, mergeTables,
 } from '../store.js';
 import { money, num, signed, date, esc, kpi, medal, modal, confirmDialog, run, toast, placesLabel, parsePlaces, playerName } from '../ui.js';
-import { parseLevels, levelsText } from '../calc.js';
+import { parseLevels, levelsText, canMergeTables, finalTableSize } from '../calc.js';
 import { mountClock } from '../blinds.js';
 
 export async function render(root, { args, isCurrent }) {
@@ -60,6 +60,7 @@ export async function render(root, { args, isCurrent }) {
     const ro = auth.isAdmin ? '' : 'disabled';
     const byPosition = Object.fromEntries(s.entries.filter((e) => e.position).map((e) => [e.position, e]));
     const alive = s.entries.filter((e) => !e.eliminated_at).length;
+    const merge = canMergeTables(game, finalTableSize(settings));
     // Durante la partida: primero los que siguen en juego, luego los eliminados por posición.
     const rows = finished
       ? s.entries
@@ -167,10 +168,14 @@ export async function render(root, { args, isCurrent }) {
             <div class="row no-print admin-only">
               <label class="row hint">Máx. por mesa <input type="number" min="2" max="12" value="${game.seating?.seats_per_table || settings.seats_per_table}" data-seats style="width:70px"></label>
               <label class="row hint">Mesas <input type="number" min="1" max="10" placeholder="auto" data-tables style="width:70px"></label>
-              <button class="btn-primary btn-sm" data-shuffle ${s.players < 2 ? 'disabled' : ''}>🎲 Sortear</button>
+              <button class="btn-primary btn-sm" data-shuffle ${alive < 2 ? 'disabled' : ''}>🎲 Sortear</button>
               ${game.seating ? '<button class="btn-sm" data-print>Imprimir</button><button class="btn-sm btn-ghost" data-clear-seats>Limpiar</button>' : ''}
             </div>
           </div>
+          ${merge.can ? `<div class="merge-banner">
+            <span>Quedan <strong>${merge.alive}</strong> jugadores en ${merge.tables} mesas: ya pueden unirse en una sola.</span>
+            <button class="btn-primary admin-only" data-merge>🔀 Unir en una mesa</button>
+          </div>` : ''}
           ${seatingHtml(game, s)}
         </section>
 
@@ -187,18 +192,24 @@ export async function render(root, { args, isCurrent }) {
 
   function seatingHtml(g, s) {
     if (!g.seating) return '<p class="hint">Sortea para asignar mesas y asientos al azar. Si son más del máximo por mesa, se reparten en varias mesas parejas.</p>';
-    const names = Object.fromEntries(s.entries.map((e) => [e.player_id, e.name]));
+    const byPlayer = Object.fromEntries(s.entries.map((e) => [e.player_id, e]));
     const seated = new Set(g.seating.tables.flatMap((t) => t.seats));
-    const unseated = s.entries.filter((e) => !seated.has(e.player_id));
+    const unseated = s.entries.filter((e) => !e.eliminated_at && !seated.has(e.player_id));
+    const seat = (pid, i, t) => {
+      const e = byPlayer[pid];
+      const name = e ? esc(e.name) : '<em>(retirado)</em>';
+      const btn = t.button === i ? '<span class="dealer-btn" title="Botón inicial">D</span>' : '';
+      return e?.eliminated_at ? `<li class="seat-out">${name} <small>fuera${e.position ? ` · ${e.position}°` : ''}</small>${btn}</li>` : `<li>${name}${btn}</li>`;
+    };
     return `
       ${unseated.length ? `<div class="alert" style="margin-bottom:.75rem">Sin mesa: ${unseated.map((e) => esc(e.name)).join(', ')}. Vuelve a sortear para incluirlos.</div>` : ''}
       <div class="tables">
         ${g.seating.tables.map((t) => `<div class="poker-table">
-          <h3><span>Mesa ${t.table}</span><span style="opacity:.75;font-weight:400">${t.seats.length} jugadores</span></h3>
-          <ol>${t.seats.map((pid, i) => `<li>${names[pid] ? esc(names[pid]) : '<em style="opacity:.6">(retirado)</em>'}${t.button === i ? '<span class="dealer-btn" title="Botón inicial">D</span>' : ''}</li>`).join('')}</ol>
+          <h3><span>${g.seating.final ? '🏆 Mesa final' : `Mesa ${t.table}`}</span><span style="opacity:.75;font-weight:400">${t.seats.filter((pid) => !byPlayer[pid]?.eliminated_at).length} en juego</span></h3>
+          <ol>${t.seats.map((pid, i) => seat(pid, i, t)).join('')}</ol>
         </div>`).join('')}
       </div>
-      <p class="hint">Sorteado ${new Date(g.seating.created_at).toLocaleString('es-CR')}. El número es el asiento; <span class="dealer-btn" style="margin:0">D</span> marca el botón inicial.</p>`;
+      <p class="hint">${g.seating.final ? 'Mesas unidas' : 'Sorteado'} ${new Date(g.seating.created_at).toLocaleString('es-CR')}. El número es el asiento; <span class="dealer-btn" style="margin:0">D</span> marca el botón inicial.</p>`;
   }
 
   function bind(available) {
@@ -288,6 +299,16 @@ export async function render(root, { args, isCurrent }) {
         tables: Number($('[data-tables]').value) || undefined,
       }), 'Mesas sorteadas 🎲'));
     };
+    const mergeBtn = $('[data-merge]');
+    if (mergeBtn) mergeBtn.onclick = async () => {
+      const n = s.entries.filter((e) => !e.eliminated_at).length;
+      if (!(await modal({
+        title: 'Unir en una mesa',
+        body: `<p>Los <strong>${n}</strong> jugadores que siguen en juego pasan a una sola mesa. Los asientos y el botón de dealer se sortean de nuevo.</p>`,
+        submitLabel: '🔀 Unir y sortear',
+      }))) return;
+      update(await run(() => mergeTables(game.id, settings), 'Mesa final sorteada 🏆'));
+    };
     const clear = $('[data-clear-seats]');
     if (clear) clear.onclick = async () => update(await run(() => clearSeating(game.id)));
     const print = $('[data-print]');
@@ -320,11 +341,12 @@ function editConfig(game, templates) {
       </div>
       <h3 style="margin-top:1rem">Ciegas</h3>
       <div class="form-grid">
+        <label class="field"><span>Duración total (horas)</span><input type="number" name="total_hours" min="0" step="0.25" value="${game.total_minutes / 60}" required title="0 = sin límite"></label>
         <label class="field"><span>Minutos por nivel</span><input type="number" name="blind_minutes" min="0" step="1" value="${game.blind_minutes}" required></label>
         <label class="field row" style="align-self:end;min-height:38px"><input type="checkbox" name="blind_on_elimination" ${game.blind_on_elimination ? 'checked' : ''}> Subir al eliminar a un jugador</label>
       </div>
       <label class="field" style="margin-top:.5rem"><span>Niveles (chica/grande)</span><input name="blind_levels" value="${esc(levelsText(game.blind_levels))}" required></label>
-      <span class="hint">Minutos en 0 = solo suben al eliminar o a mano. El último nivel es el tope.</span>
+      <span class="hint">Duración total en 0 = sin límite; al cumplirse solo avisa. Minutos por nivel en 0 = las ciegas solo suben al eliminar o a mano. El último nivel es el tope.</span>
       <label class="field" style="margin-top:.75rem"><span>Notas</span><textarea name="notes">${esc(game.notes || '')}</textarea></label>`,
     onOpen(form) {
       const input = form.elements.places;
@@ -347,6 +369,7 @@ function editConfig(game, templates) {
         places,
         notes: f.notes.value,
         blind_minutes: f.blind_minutes.value,
+        total_minutes: Math.round(Number(f.total_hours.value) * 60),
         blind_on_elimination: f.blind_on_elimination.checked,
         blind_levels: parseLevels(f.blind_levels.value),
       });

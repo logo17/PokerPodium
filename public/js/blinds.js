@@ -64,6 +64,21 @@ function alertOneMinute() {
   navigator.vibrate?.(200);
 }
 
+function alertTimeWarning() {
+  if (!alertsOn()) return;
+  tones([700, 520, 700, 520], 0.25, 0.22);
+  navigator.vibrate?.([300, 100, 300]);
+}
+
+function alertTimeUp() {
+  if (!alertsOn()) return;
+  tones([1175, 880, 660, 1175, 880, 660, 1175, 880, 660], 0.2, 0.3);
+  navigator.vibrate?.([600, 200, 600, 200, 600]);
+}
+
+// Avisos antes del final de la partida (minutos restantes).
+const TIME_WARNINGS = [30, 10];
+
 // ---------- Formato ----------
 
 export function formatDuration(ms) {
@@ -75,6 +90,12 @@ export function formatDuration(ms) {
 }
 
 const blindsLabel = (l) => `${money(l.sb)} / ${money(l.bb)}`;
+
+export function hoursLabel(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return [h && `${h} h`, m && `${m} min`].filter(Boolean).join(' ') || '0 min';
+}
 
 function rulesLabel(game) {
   const parts = [];
@@ -94,6 +115,7 @@ export function mountClock(el, { large = false, gameId, onAction }) {
   let renderedLevel = null;
   let lastLevel = null;
   let warnedLevel = null;
+  let lastTotalRemaining = null;
   let busy = false;
 
   function render() {
@@ -115,6 +137,7 @@ export function mountClock(el, { large = false, gameId, onAction }) {
           <span class="spacer"></span>
           <button class="btn-sm btn-ghost" data-alerts title="Sonido y vibración al subir las ciegas">${alertsOn() ? '🔔 Alertas' : '🔕 Alertas'}</button>
         </div>
+        ${s.totalMs ? '<div class="bc-total" data-total></div>' : ''}
         <div class="bc-blinds">
           <div><span class="bc-label">Ciega chica</span><span class="bc-amount">${money(s.current.sb)}</span></div>
           <div><span class="bc-label">Ciega grande</span><span class="bc-amount">${money(s.current.bb)}</span></div>
@@ -167,7 +190,33 @@ export function mountClock(el, { large = false, gameId, onAction }) {
       toast(`⬆ Suben las ciegas: ${blindsLabel(s.current)}`);
     }
     lastLevel = s.level;
-    if (s.level !== renderedLevel) render();
+    if (s.level !== renderedLevel || !!s.totalMs !== !!el.querySelector('[data-total]')) render();
+
+    // Tiempo total de la partida: avisos a los 30 y 10 minutos, y al terminar.
+    if (s.totalMs) {
+      const rem = s.totalRemainingMs;
+      if (lastTotalRemaining !== null && s.started) {
+        if (lastTotalRemaining > 0 && rem === 0) {
+          alertTimeUp();
+          toast('⏰ ¡Tiempo cumplido! La partida terminó.');
+        } else {
+          const crossed = TIME_WARNINGS.filter((m) => lastTotalRemaining > m * 60000 && rem <= m * 60000 && rem > 0);
+          if (crossed.length) {
+            alertTimeWarning();
+            toast(`⏱ Quedan ${Math.min(...crossed)} minutos de partida`);
+          }
+        }
+      }
+      lastTotalRemaining = rem;
+      const total = el.querySelector('[data-total]');
+      total.classList.toggle('bc-total-over', s.timeUp);
+      total.classList.toggle('bc-urgent', !s.timeUp && s.started && rem <= 10 * 60000);
+      total.innerHTML = s.timeUp
+        ? `⏰ <strong>¡Tiempo cumplido! La partida terminó.</strong> <span class="bc-over">+${formatDuration(s.totalElapsedMs - s.totalMs)}</span>`
+        : `⏱ Partida: <strong>${formatDuration(rem)}</strong> ${s.started ? 'restantes' : ''} <span class="muted">de ${hoursLabel(s.totalMs / 60000)}</span>`;
+    } else {
+      lastTotalRemaining = null;
+    }
 
     const countdown = el.querySelector('[data-countdown]');
     const progress = el.querySelector('[data-progress]');

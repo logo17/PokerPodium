@@ -23,6 +23,7 @@ export async function render(root, { isCurrent }) {
               <label class="field"><span>Recompra (₡)</span><input type="number" name="rebuy" min="0" step="500" value="${esc(settings.rebuy)}"></label>
               <label class="field"><span>Dealer por cabeza (₡)</span><input type="number" name="dealer_fee" min="0" step="500" value="${esc(settings.dealer_fee)}"></label>
               <label class="field"><span>Máx. jugadores por mesa</span><input type="number" name="seats_per_table" min="2" max="12" value="${esc(settings.seats_per_table)}"></label>
+              <label class="field"><span>Unir en una mesa con (o menos)</span><input type="number" name="final_table_size" min="2" max="12" value="${esc(settings.final_table_size || '10')}" title="Cuando quedan estos jugadores o menos se sugiere unir las mesas"></label>
             </div>
             <label class="field"><span>Estructura de premios por defecto</span>
               <select name="default_template_id">${templates.map((t) => `<option value="${t.id}" ${String(t.id) === settings.default_template_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
@@ -43,17 +44,18 @@ export async function render(root, { isCurrent }) {
       </section>
 
       <section class="card">
-        <h2>Ciegas</h2>
+        <h2>Ciegas y tiempo</h2>
         <p class="hint">Se copian a cada partida nueva; en cada partida se pueden ajustar en ⚙︎ Configuración.</p>
         <form data-blinds class="stack">
           <fieldset ${ro} style="border:0;padding:0;margin:0" class="stack">
             <div class="form-grid">
+              <label class="field"><span>Duración total (horas)</span><input type="number" name="total_hours" min="0" step="0.25" value="${blinds.totalMinutes / 60}" required title="0 = sin límite"></label>
               <label class="field"><span>Minutos por nivel</span><input type="number" name="blind_minutes" min="0" step="1" value="${blinds.minutes}" required></label>
               <label class="field row" style="align-self:end;min-height:38px"><input type="checkbox" name="blind_on_elimination" ${blinds.onElimination ? 'checked' : ''}> Subir al eliminar a un jugador</label>
             </div>
             <label class="field"><span>Niveles (chica/grande, separados por coma)</span><textarea name="blind_levels" rows="2">${esc(levelsText(blinds.levels))}</textarea></label>
           </fieldset>
-          <p class="hint">Minutos en 0 = solo suben al eliminar a alguien o a mano. El último nivel es el tope.</p>
+          <p class="hint">Duración total: avisa a los 30 y 10 minutos del final y cuando se cumple (0 = sin límite). Minutos por nivel en 0 = las ciegas solo suben al eliminar a alguien o a mano. El último nivel es el tope.</p>
           <div class="table-wrap"><table data-levels-preview></table></div>
           <div class="admin-only"><button class="btn-primary">Guardar ciegas</button></div>
         </form>
@@ -102,6 +104,7 @@ export async function render(root, { isCurrent }) {
     await run(
       () => saveSettings({
         blind_minutes: f.blind_minutes.value,
+        total_minutes: Math.round(Number(f.total_hours.value) * 60),
         blind_on_elimination: f.blind_on_elimination.checked,
         blind_levels: parseLevels(f.blind_levels.value),
       }),
